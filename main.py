@@ -7,29 +7,25 @@ from telegram.ext import Dispatcher, CommandHandler, CallbackQueryHandler
 # Получаем токен из переменных окружения
 TOKEN = os.environ.get("TOKEN")
 
-# Проверка: если токен не найден — логируем ошибку
 if not TOKEN:
     raise ValueError("❌ Переменная окружения 'TOKEN' не установлена!")
 
-# Настройка бота и Flask
+# Настройка логгирования и Flask
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 dispatcher = Dispatcher(bot, update_queue=None, use_context=True)
-logging.basicConfig(level=logging.INFO)
 
-# Хранилище донатов
+# Константы
 donations = []
+MIN_AMOUNT = 0.15  # Минимальная сумма в USD
+DA_LINK = "https://www.donationalerts.com/r/archive_unlock?v=2"
+CONTENT_LINK = "https://drive.google.com/drive/folders/18OEeQ4QhgHEDWac1RJz0PY8EoJVZbGH_?usp=drive_link"
 
-# Настройки
-MIN_AMOUNT = 0.15
-CONTENT_LINK = "https://telegra.ph/Ayazhan-Secret-File-03-27"
-
-# Главная страница
 @app.route('/')
 def home():
     return '✅ Бот успешно работает!'
 
-# Обработка доната с donationalerts
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
@@ -37,24 +33,22 @@ def webhook():
         username = data['username']
         amount = float(data['amount'])
         donations.append({'username': username.lower(), 'amount': amount})
-        logging.info(f"💸 Новый донат: {username} — {amount}₽")
+        logging.info(f"💸 Донат: {username} — {amount}$")
     return "OK", 200
 
-# Команда /start
 def start(update, context):
-    keyboard = [[InlineKeyboardButton("✅ Я оплатил", callback_data="check_payment")]]
+    keyboard = [[InlineKeyboardButton("💸 ОПЛАТИТЬ", url=DA_LINK)],
+                [InlineKeyboardButton("✅ Я оплатил", callback_data="check_payment")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text(
-        "💵 Чтобы получить доступ к закрытому контенту, отправь донат от **$0.15** сюда:\n"
-        "https://www.donationalerts.com/r/archive_unlock?v=2\n\n"
-        "⚠️ Обязательно укажи свой @username в комментарии к донату, иначе бот не сможет тебя распознать!\n\n"
-        "💱 Сумма автоматически сконвертируется в твою валюту (₽, ₸, ₴ и т.д.) — просто выбери удобный способ оплаты.",
+        "👋 Добро пожаловать! Чтобы получить доступ к эксклюзивному материалу, выполни следующие шаги:\n\n"
+        f"1️⃣ Перейди по кнопке \"💸 ОПЛАТИТЬ\" и сделай донат от ${0.15} через DonationAlerts.\n"
+        "2️⃣ Обязательно укажи свой @username в комментарии к платежу.\n"
+        "3️⃣ После оплаты вернись и нажми кнопку \"✅ Я оплатил\".\n\n"
+        "После проверки доната ты получишь доступ к закрытому контенту. Спасибо за поддержку!",
         reply_markup=reply_markup
     )
 
-    )
-
-# Обработка кнопки "Я оплатил"
 def check_payment(update, context):
     query = update.callback_query
     user = query.from_user
@@ -65,20 +59,14 @@ def check_payment(update, context):
             query.message.reply_text(f"🎉 Спасибо за поддержку! Вот твой контент:\n{CONTENT_LINK}")
             return
 
-    query.message.reply_text("❌ Донат не найден. Убедись, что указал @username и сумма не меньше 300₽.")
+    query.message.reply_text("❌ Донат не найден. Убедись, что указал @username и сумма не меньше $0.15.")
 
 # Обработчики
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CallbackQueryHandler(check_payment))
 
-# Webhook от Telegram
 @app.route(f"/{TOKEN}", methods=["POST"])
 def telegram_webhook():
     update = Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
     return "OK", 200
-
-# Запуск приложения с портом от Render
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
