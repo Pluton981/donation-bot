@@ -7,29 +7,24 @@ from telegram.ext import Dispatcher, CommandHandler, CallbackQueryHandler
 # Получаем токен из переменных окружения
 TOKEN = os.environ.get("TOKEN")
 
-# Проверка: если токен не найден — логируем ошибку
 if not TOKEN:
     raise ValueError("❌ Переменная окружения 'TOKEN' не установлена!")
 
-# Настройка Flask и Telegram Bot
-app = Flask(__name__)
 bot = Bot(token=TOKEN)
+app = Flask(__name__)
 dispatcher = Dispatcher(bot, update_queue=None, use_context=True)
 logging.basicConfig(level=logging.INFO)
 
-# Донаты (временное хранилище)
 donations = []
-
-# Настройки
 MIN_AMOUNT = 0.15
 CONTENT_LINK = "https://drive.google.com/drive/folders/18OEeQ4QhgHEDWac1RJz0PY8EoJVZbGH_?usp=drive_link"
-DA_LINK = "https://www.donationalerts.com/r/archive_unlock?v=2"
+DONATE_URL = "https://www.donationalerts.com/r/archive_unlock?v=2"
 
 @app.route('/')
 def home():
-    return '✅ Бот успешно работает!'
+    return '✅ Бот работает'
 
-@app.route('/webhook', methods=['POST'])
+@app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
     if data and 'username' in data and 'amount' in data:
@@ -40,20 +35,23 @@ def webhook():
     return "OK", 200
 
 def start(update, context):
-    keyboard = [[InlineKeyboardButton("💵 ОПЛАТИТЬ", url=DA_LINK)],
+    keyboard = [[InlineKeyboardButton("💳 ОПЛАТИТЬ", url=DONATE_URL)],
                 [InlineKeyboardButton("✅ Я оплатил", callback_data="check_payment")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Текст до изображения
-    text_top = (
+    intro_text = (
         "💸 Вывод за неделю — $1 250\n"
         "Без лица.\n"
         "Без публичности.\n"
         "При трудозатратах ~30 мин в день."
     )
 
-    # Текст после изображения
-    text_bottom = (
+    update.message.reply_text(intro_text)
+
+    with open("kaspi.jpg", "rb") as photo:
+        context.bot.send_photo(chat_id=update.message.chat_id, photo=photo)
+
+    main_text = (
         "Один образ.\n"
         "Чёткая подача.\n"
         "И система, в которой каждый шаг уже расписан.\n\n"
@@ -81,13 +79,7 @@ def start(update, context):
         "4️⃣ Получи ссылку на материал"
     )
 
-    update.message.reply_text(text_top)
-
-    # Отправим изображение выплат
-    with open("photo_2025-03-31_03-23-57 копия.jpg", "rb") as photo:
-        update.message.reply_photo(photo)
-
-    update.message.reply_text(text_bottom, reply_markup=reply_markup)
+    update.message.reply_text(main_text, reply_markup=reply_markup)
 
 def check_payment(update, context):
     query = update.callback_query
@@ -99,9 +91,8 @@ def check_payment(update, context):
             query.message.reply_text(f"🎉 Спасибо за поддержку! Вот твой контент:\n{CONTENT_LINK}")
             return
 
-    query.message.reply_text("❌ Донат не найден. Убедись, что указал @username и сумму не меньше $20.")
+    query.message.reply_text("❌ Донат не найден. Укажи @username и сумму от $20.")
 
-# Обработчики
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CallbackQueryHandler(check_payment))
 
@@ -111,5 +102,5 @@ def telegram_webhook():
     dispatcher.process_update(update)
     return "OK", 200
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
