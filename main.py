@@ -12,7 +12,7 @@ TELEGRAM_TOKEN = os.environ.get("TOKEN")
 DA_SECRET = os.environ.get("DA_SECRET")
 
 if not TELEGRAM_TOKEN or not DA_SECRET:
-    raise ValueError("❌ Отсутствует TELEGRAM TOKEN или DA TOKEN")
+    raise ValueError("❌ Отсутствует TELEGRAM TOKEN или DA SECRET")
 
 # Настройка
 app = Flask(__name__)
@@ -20,18 +20,16 @@ bot = Bot(token=TELEGRAM_TOKEN)
 dispatcher = Dispatcher(bot, update_queue=None, use_context=True)
 logging.basicConfig(level=logging.INFO)
 
-# Переменные
+# Данные
 donations = []
 MIN_AMOUNT = 0.15
 CONTENT_LINK = "https://drive.google.com/drive/folders/18OEeQ4QhgHEDWac1RJz0PY8EoJVZbGH_?usp=drive_link"
 DA_EXPECTED_CURRENCY = "USD"
 
-# Главная страница
 @app.route("/")
 def home():
     return "✅ Бот работает!"
 
-# Вебхук от DonationAlerts
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
@@ -51,7 +49,6 @@ def webhook():
 
     return "OK", 200
 
-# Команда /start
 def start(update, context):
     user = update.message.from_user
     keyboard = [
@@ -64,17 +61,15 @@ def start(update, context):
         "💸 Вывод за неделю — $1 250\n"
         "Без лица.\n"
         "Без публичности.\n"
-        "При трудозатратах ~30 мин в день.\n\n"
+        "При трудозатратах ~30 мин в день.\n"
     )
-
     update.message.reply_text(message)
 
-    # Вставка скрина
     with open("kaspi.jpg", "rb") as photo:
         bot.send_photo(chat_id=update.message.chat_id, photo=photo)
 
-    after_image_text = (
-        "Один образ.\n"
+    after_image = (
+        "\nОдин образ.\n"
         "Чёткая подача.\n"
         "И система, в которой каждый шаг уже расписан.\n\n"
         "Ты создаёшь модель,\n"
@@ -95,15 +90,14 @@ def start(update, context):
         "Всё уже проверено. Просто действуй по инструкции.\n\n"
         f"💵 Чтобы получить доступ:\n"
         f"Закрытый доступ к инструкции — ${MIN_AMOUNT}\n\n"
-        "1️⃣ Нажми [ОПЛАТИТЬ] и сделай перевод\n"
-        "2️⃣ В комментарии ОБЯЗАТЕЛЬНО укажи свой @username в Телеграме\n"
-        "3️⃣ После оплаты нажми [✅ Я оплатил]\n"
-        "4️⃣ Получи ссылку на материал"
+        "1⃣ Нажми [ОПЛАТИТЬ] и сделай перевод\n"
+        "2⃣ В комментарии ОБЯЗАТЕЛЬНО укажи свой @username в Телеграме\n"
+        "3⃣ После оплаты нажми [✅ Я оплатил]\n"
+        "4⃣ Получи ссылку на материал"
     )
 
-    update.message.reply_text(after_image_text, reply_markup=reply_markup)
+    update.message.reply_text(after_image, reply_markup=reply_markup)
 
-# Проверка оплаты
 def check_payment(update, context):
     query = update.callback_query
     user = query.from_user
@@ -111,31 +105,28 @@ def check_payment(update, context):
 
     for donation in donations:
         if username in donation['username'] and donation['amount'] >= MIN_AMOUNT:
-            query.message.reply_text(f"🎉 Спасибо за поддержку! Вот твой контент:\n{CONTENT_LINK}")
+            query.message.reply_text(f"🎉 Спасибо! Вот ссылка: {CONTENT_LINK}")
             return
 
-    query.message.reply_text("❌ Донат не найден. Убедись, что указал @username и сумма не меньше $0.15.")
+    query.message.reply_text("❌ Донат не найден. Укажи @username и сумму от $0.15.")
 
-# Добавление хендлеров
+# Обработчики
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CallbackQueryHandler(check_payment))
 
-# Вебхук Telegram
 @app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
 def telegram_webhook():
     update = Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
     return "OK", 200
 
-# Плановая очистка донатов
 def clear_donations():
     donations.clear()
-    logging.info("🧹 Хранилище донатов очищено")
+    logging.info("🧹 Донаты очищены")
 
 scheduler = BackgroundScheduler(timezone=utc)
 scheduler.add_job(clear_donations, "interval", hours=12)
 scheduler.start()
 
-# Запуск
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
