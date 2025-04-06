@@ -11,7 +11,8 @@ from datetime import datetime
 
 # Токены
 TELEGRAM_TOKEN = "7322072186:AAF8rbIQ8P_B11vLx2QNOM9-Rnblo6mf7hc"
-YOUMONEY_TOKEN = "06A3B002CB441ECF28EAFAF2446280A50094CF624E09C237138B7D653C37CE61"
+QIWI_TOKEN = "bc03ddff40973afe4bad801342fb7e9f"
+QIWI_PHONE = "77786808870"
 
 # Настройка
 app = Flask(__name__)
@@ -37,51 +38,33 @@ def telegram_webhook():
 def start(update, context):
     user = update.message.from_user
     keyboard = [
-        [InlineKeyboardButton("💵 ОПЛАТИТЬ", url="https://yoomoney.ru/to/4100116270792125")],
+        [InlineKeyboardButton("💵 ОПЛАТИТЬ (QIWI)", url="https://qiwi.com/payment/form/99?extra%5B%27account%27%5D=77786808870&amountInteger=1&currency=398&comment=@username")],
         [InlineKeyboardButton("✅ Я оплатил", callback_data="check_payment")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     message = (
-        "💸 Вывод за неделю — $1 250\n"
-        "Без лица.\n"
-        "Без публичности.\n"
-        "При трудозатратах ~30 мин в день.\n"
+        "💸 Минимальный донат: от $0.15 (≈ 70–150₸)
+"
+        "Оплата доступна с карты любого банка через QIWI.
+"
+        "❗ В комментарии обязательно укажи свой @username из Telegram."
     )
     update.message.reply_text(message)
 
     with open("kaspi.jpg", "rb") as photo:
         bot.send_photo(chat_id=update.message.chat_id, photo=photo)
 
-    after_image = (
-        "\nОдин образ.\n"
-        "Чёткая подача.\n"
-        "И система, в которой каждый шаг уже расписан.\n\n"
-        "Ты создаёшь модель,\n"
-        "генерируешь визуал,\n"
-        "отвечаешь по готовым шаблонам\n"
-        "— и монетизируешь внимание.\n\n"
-        "📌 Это и есть AI Girl 2.0\n\n"
-        "🤖 AI Girl 2.0 — связка, которая приносит деньги\n"
-        "Это пошаговая система:\n"
-        "👩 Генерация и оформление модели\n"
-        "📸 AI-образы и подача\n"
-        "💸 Получение донатов\n\n"
-        "Ты получаешь:\n"
-        "• Полный план запуска\n"
-        "• Все нужные инструменты\n"
-        "• Шаблоны общения\n"
-        "• Способ приёма оплаты\n\n"
-        "Всё уже проверено. Просто действуй по инструкции.\n\n"
-        f"💵 Чтобы получить доступ:\n"
-        f"Закрытый доступ к инструкции — ${MIN_AMOUNT}\n\n"
-        "1⃣ Нажми [ОПЛАТИТЬ] и сделай перевод\n"
-        "2⃣ В комментарии ОБЯЗАТЕЛЬНО укажи свой @username в Телеграме\n"
-        "3⃣ После оплаты нажми [✅ Я оплатил]\n"
+    instructions = (
+        "\n1⃣ Нажми [ОПЛАТИТЬ] и сделай перевод
+"
+        "2⃣ Укажи @username в комментарии
+"
+        "3⃣ Нажми [✅ Я оплатил]
+"
         "4⃣ Получи ссылку на материал"
     )
-
-    update.message.reply_text(after_image, reply_markup=reply_markup)
+    update.message.reply_text(instructions, reply_markup=reply_markup)
 
 # Обработка кнопки "✅ Я оплатил"
 def check_payment(update, context):
@@ -93,47 +76,53 @@ def check_payment(update, context):
         query.message.reply_text("❌ У вас не установлен username. Установите его в настройках Telegram и попробуйте снова.")
         return
 
-    if verify_yoomoney_payment(username):
+    if verify_qiwi_payment(username):
         query.message.reply_text(f"🎉 Спасибо! Вот ссылка на материал:\n{CONTENT_LINK}")
     else:
-        query.message.reply_text("❌ Донат не найден. Убедитесь, что перевели от $0.15 и указали @username в комментарии.")
+        query.message.reply_text("❌ Донат не найден. Убедитесь, что вы указали @username в комментарии и сумма не менее $0.15.")
 
-# Проверка YouMoney
-def verify_yoomoney_payment(username):
-    headers = {"Authorization": f"Bearer {YOUMONEY_TOKEN}"}
-    data = {
-        "type": "deposition",
-        "records": 25
+# Проверка платежей QIWI
+def verify_qiwi_payment(username):
+    url = f"https://edge.qiwi.com/payment-history/v2/persons/{QIWI_PHONE}/payments"
+    headers = {
+        "Authorization": f"Bearer {QIWI_TOKEN}"
+    }
+    params = {
+        "rows": 20,
+        "operation": "IN"
     }
 
-    response = requests.post("https://yoomoney.ru/api/operation-history", headers=headers, data=data)
-    if response.status_code != 200:
-        logging.warning("Не удалось получить историю операций")
-        return False
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code != 200:
+            logging.warning("⚠️ Не удалось получить историю QIWI")
+            return False
 
-    operations = response.json().get("operations", [])
-    now = datetime.utcnow().timestamp()
+        data = response.json()
+        now = datetime.utcnow().timestamp()
 
-    for op in operations:
-        amount = float(op.get("amount", 0))
-        message = op.get("message", "").lower()
-        time_str = op.get("datetime", "")
-        time_ts = parse_iso_to_ts(time_str)
+        for tx in data.get("data", []):
+            amount = tx.get("sum", {}).get("amount", 0)
+            comment = tx.get("comment", "") or ""
+            date_str = tx.get("date", "")
+            tx_ts = parse_iso_to_ts(date_str)
 
-        if (
-            username in message and
-            amount >= MIN_AMOUNT and
-            abs(now - time_ts) < 900
-        ):
-            return True
+            if (
+                username in comment.lower() and
+                float(amount) >= MIN_AMOUNT and
+                abs(now - tx_ts) < 900
+            ):
+                return True
 
+    except Exception as e:
+        logging.error(f"❌ Ошибка при запросе QIWI API: {e}")
     return False
 
 def parse_iso_to_ts(iso_str):
     dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
     return dt.timestamp()
 
-# Плановая задача (опционально)
+# Плановая задача
 def dummy():
     logging.info("🧹 Плановая задача")
 
@@ -145,7 +134,6 @@ scheduler.start()
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CallbackQueryHandler(check_payment))
 
-# Обязательный запуск с портом от Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
