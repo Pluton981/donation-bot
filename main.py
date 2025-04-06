@@ -1,4 +1,3 @@
-
 import logging
 import os
 import requests
@@ -36,7 +35,6 @@ def telegram_webhook():
 
 # Старт
 def start(update, context):
-    user = update.message.from_user
     keyboard = [
         [InlineKeyboardButton("💵 ОПЛАТИТЬ (QIWI)", url="https://qiwi.com/payment/form/99?extra%5B%27account%27%5D=77786808870&amountInteger=1&currency=398&comment=@username")],
         [InlineKeyboardButton("✅ Я оплатил", callback_data="check_payment")]
@@ -44,10 +42,8 @@ def start(update, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     message = (
-        "💸 Минимальный донат: от $0.15 (≈ 70–150₸)
-"
-        "Оплата доступна с карты любого банка через QIWI.
-"
+        "💸 Минимальный донат: от $0.15 (примерно 70–150 тенге)\n"
+        "Оплата доступна с карты любого банка через QIWI.\n"
         "❗ В комментарии обязательно укажи свой @username из Telegram."
     )
     update.message.reply_text(message)
@@ -56,12 +52,9 @@ def start(update, context):
         bot.send_photo(chat_id=update.message.chat_id, photo=photo)
 
     instructions = (
-        "\n1⃣ Нажми [ОПЛАТИТЬ] и сделай перевод
-"
-        "2⃣ Укажи @username в комментарии
-"
-        "3⃣ Нажми [✅ Я оплатил]
-"
+        "\n1⃣ Нажми [ОПЛАТИТЬ] и сделай перевод\n"
+        "2⃣ Укажи @username в комментарии\n"
+        "3⃣ Нажми [✅ Я оплатил]\n"
         "4⃣ Получи ссылку на материал"
     )
     update.message.reply_text(instructions, reply_markup=reply_markup)
