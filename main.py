@@ -144,3 +144,8 @@ scheduler.start()
 # Обработчики
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CallbackQueryHandler(check_payment))
+
+# Обязательный запуск с портом от Render
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
